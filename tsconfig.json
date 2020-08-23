@@ -7,17 +7,17 @@
     "noImplicitAny": true,
     "moduleResolution": "node",
     "sourceMap": true,
-    "outDir": "server/dist",
+    "outDir": "dist",
     "baseUrl": ".",
     "paths": {
       "*": [
         "node_modules/*",
-        "server/src/types/*"
+        "src/types/*"
       ]
     }
   },
   "include": [
-    "server/src/**/*"
+    "src/**/*"
   ],
   "exclude": [
     "**/*.spec.ts"
