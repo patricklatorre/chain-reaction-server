@@ -17,6 +17,30 @@ const rooms: any = {};
 
 io.on('connection', (socket) => {
 
+  const getNextPlayerIdx = (roomId: number, playerInfo: any) => {
+    // Evaluate next player
+    let nextPlayerIdx = playerInfo.idx;
+
+    while (true) {
+      nextPlayerIdx++;
+
+      if (nextPlayerIdx === playerInfo.idx) {
+        console.log(`ERROR: getNextPlayerIdx evaluator has already cycled through all players. No viable candidate for next player.`);
+        break;
+      }
+
+      if (nextPlayerIdx === rooms[roomId].players.length) {
+        nextPlayerIdx = 0;
+      }
+
+      if (rooms[roomId].players[nextPlayerIdx].alive) {
+        break;
+      }
+    }
+
+    return nextPlayerIdx;
+  }
+
   // LEAVE SOCKETIO ROOM
   socket.on('leave_socket_room', (args: any) => {
     const { roomId } = args;
@@ -40,7 +64,11 @@ io.on('connection', (socket) => {
       currentPlayerTurn: 0,
     };
 
-    rooms[newRoomId].players.push(playerName);
+    rooms[newRoomId].players.push({
+      name: playerName,
+      alive: true,
+    });
+
     socket.emit('create_room', rooms[newRoomId]);
   });
 
@@ -59,7 +87,10 @@ io.on('connection', (socket) => {
     const playerIdx = rooms[roomId].players.length;
 
     socket.join(roomId);
-    rooms[roomId].players.push(playerName);
+    rooms[roomId].players.push({
+      name: playerName,
+      alive: true,
+    });
 
     io.to(roomId).emit('join_room', {
       roomInfo: rooms[roomId],
@@ -80,15 +111,8 @@ io.on('connection', (socket) => {
   socket.on('do_move', (args: any) => {
     const { roomId, playerInfo, x, y } = args;
 
-    const roomInfo = rooms[roomId];
-
-    console.log('before: ' + rooms[roomId].currentPlayerTurn);
-
     // Evaluate next player
-    rooms[roomId].currentPlayerTurn = (playerInfo.idx < roomInfo.players.length - 1) ?
-      (playerInfo.idx + 1) : 0;
-
-    console.log('after: ' + rooms[roomId].currentPlayerTurn);
+    rooms[roomId].currentPlayerTurn = getNextPlayerIdx(roomId, playerInfo);
 
     // Send enemy_move (difference between do_move is it sends entire room_info)
     io.to(roomId).emit('broadcast_move', {
@@ -102,6 +126,45 @@ io.on('connection', (socket) => {
   socket.on('leave_room', (args: any) => {
     const { roomId } = args;
     socket.leave(roomId);
+  });
+
+  socket.on('skip_dead_player', (args: any) => {
+    const { roomId, playerInfo } = args;
+    console.log(`skip_dead_player ${JSON.stringify(playerInfo)}`);
+
+    const idx = playerInfo.idx;
+    rooms[roomId].players[idx].alive = false;
+
+    rooms[roomId].currentPlayerTurn = getNextPlayerIdx(roomId, playerInfo);
+
+    io.to(roomId).emit('broadcast_skip', {
+      roomInfo: rooms[roomId],
+      playerInfo
+    });
+  });
+
+  socket.on('win_check', (args: any) => {
+    const { roomId } = args;
+
+    const aliveList = rooms[roomId].players
+      .filter((player: { name: string, alive: any; }) => player.alive);
+
+    if (aliveList.length === 1) {
+      rooms[roomId].isDone = true;
+      rooms[roomId].isRunning = false;
+
+      const idx = rooms[roomId].players
+        .map((player: { name: string, alive: any; }) => player.alive)
+        .indexOf(true);
+
+      io.to(roomId).emit('declare_winner', {
+        roomInfo: rooms[roomId],
+        playerInfo: {
+          name: aliveList[0].name,
+          idx: idx,
+        }
+      });
+    }
   });
 });
 
