@@ -1,0 +1,47 @@
+{
+    "name": "chain-reaction-rest-server",
+    "version": "1.0.0",
+    "description": "",
+    "main": "dist/index.js",
+    "scripts": {
+        "start": "node dist/index.js",
+        "watch": "concurrently \"npm:watch:*\"",
+        "watch:server": "nodemon",
+        "build": "npm run build:server",
+        "build:server": "tsc",
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "browserslist": [
+        "last 20 Chrome versions"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/patricklatorre/typescript-starter.git"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "Apache 2.0",
+    "bugs": {
+        "url": "https://github.com/patricklatorre/typescript-starter/issues"
+    },
+    "homepage": "https://github.com/patricklatorre/typescript-starter#readme",
+    "devDependencies": {
+        "@types/cors": "^2.8.6",
+        "@types/express": "^4.17.2",
+        "@types/node": "^14.6.0",
+        "@types/shortid": "0.0.29",
+        "@types/socket.io": "^2.1.11",
+        "concurrently": "^5.1.0",
+        "nodemon": "^2.0.2",
+        "parcel-bundler": "^1.12.4",
+        "sass": "^1.26.1",
+        "ts-node": "^8.6.2",
+        "typescript": "^3.8.2"
+    },
+    "dependencies": {
+        "cors": "^2.8.5",
+        "express": "^4.17.1",
+        "shortid": "^2.2.15",
+        "socket.io": "^2.3.0"
+    }
+}
