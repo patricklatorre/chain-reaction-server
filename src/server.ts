@@ -10,7 +10,6 @@ const server = http.createServer(app);
 const io = SocketIO(server);
 
 app.use(cors());
-app.use(express.static(path.join(__dirname, '../../client/build/')));
 app.use(express.json());
 
 // In-memory games
