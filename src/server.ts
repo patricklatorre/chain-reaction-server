@@ -51,6 +51,20 @@ io.on('connection', (socket) => {
   socket.on('create_room', (args: any) => {
     const { playerName, playerCount = 1 } = args;
 
+    let cleanPlayerCount = playerCount;
+
+    if (typeof playerCount === 'number') {
+      if (playerCount < 2) {
+        cleanPlayerCount = 2;
+      } else if (playerCount > 4) {
+        cleanPlayerCount = 4;
+      }
+    } else {
+      cleanPlayerCount = 2;
+    }
+
+    cleanPlayerCount = Math.trunc(cleanPlayerCount);
+
     const newRoomId = shortid.generate();
 
     socket.join(newRoomId);
@@ -58,7 +72,7 @@ io.on('connection', (socket) => {
     rooms[newRoomId] = {
       id: newRoomId,
       players: [],
-      playerCount: playerCount,
+      playerCount: cleanPlayerCount,
       isRunning: false,
       isDone: false,
       currentPlayerTurn: 0,
@@ -76,7 +90,10 @@ io.on('connection', (socket) => {
   socket.on('join_room', (args: any) => {
     const { roomId, playerName } = args;
 
-    if (rooms[roomId] === undefined) {
+    if (
+      rooms[roomId] === undefined
+      || rooms[roomId].players.length >= rooms[roomId].playerCount
+    ) {
       socket.emit('join_room', {
         roomInfo: null
       });
@@ -126,6 +143,12 @@ io.on('connection', (socket) => {
   socket.on('leave_room', (args: any) => {
     const { roomId } = args;
     socket.leave(roomId);
+  });
+
+  socket.on('leave_game', (args: any) => {
+    const { roomId } = args;
+    socket.leave(roomId);
+    socket.disconnect();
   });
 
   socket.on('skip_dead_player', (args: any) => {
