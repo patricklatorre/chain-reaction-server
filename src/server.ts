@@ -1,9 +1,9 @@
-import path from 'path';
 import express from 'express';
 import http from 'http';
 import cors from 'cors';
 import SocketIO from 'socket.io';
 import shortid from 'shortid';
+import rp from './room-provider';
 
 const app = express();
 const server = http.createServer(app);
@@ -12,12 +12,12 @@ const io = SocketIO(server);
 app.use(cors());
 app.use(express.json());
 
-// In-memory games
-const rooms: any = {};
 
 io.on('connection', (socket) => {
 
-  const getNextPlayerIdx = (roomId: number, playerInfo: any) => {
+  const getNextPlayerIdx = (roomId: string, playerInfo: any) => {
+    const room = rp.getRoomVolatile(roomId);
+
     // Evaluate next player
     let nextPlayerIdx = playerInfo.idx;
 
@@ -29,11 +29,11 @@ io.on('connection', (socket) => {
         break;
       }
 
-      if (nextPlayerIdx === rooms[roomId].players.length) {
+      if (nextPlayerIdx === room.players.length) {
         nextPlayerIdx = 0;
       }
 
-      if (rooms[roomId].players[nextPlayerIdx].alive) {
+      if (room.players[nextPlayerIdx].alive) {
         break;
       }
     }
@@ -42,13 +42,13 @@ io.on('connection', (socket) => {
   }
 
   // LEAVE SOCKETIO ROOM
-  socket.on('leave_socket_room', (args: any) => {
+  socket.on('leave_socket_room', (args: ILeaveRoomArgs) => {
     const { roomId } = args;
     socket.leave(roomId);
   });
 
   // CREATE A ROOM
-  socket.on('create_room', (args: any) => {
+  socket.on('create_room', (args: ICreateRoomArgs) => {
     const { playerName, playerCount = 1 } = args;
 
     let cleanPlayerCount = playerCount;
@@ -69,31 +69,31 @@ io.on('connection', (socket) => {
 
     socket.join(newRoomId);
 
-    rooms[newRoomId] = {
+    const firstPlayer: IPlayerStatus = {
+      name: playerName,
+      alive: true,
+    };
+
+    const newRoom: IRoom = {
       id: newRoomId,
-      players: [],
+      players: [firstPlayer],
       playerCount: cleanPlayerCount,
       isRunning: false,
       isDone: false,
       currentPlayerTurn: 0,
     };
 
-    rooms[newRoomId].players.push({
-      name: playerName,
-      alive: true,
-    });
+    rp.setRoom(newRoomId, newRoom);
 
-    socket.emit('create_room', rooms[newRoomId]);
+    socket.emit('create_room', newRoom);
   });
 
   // JOIN A ROOM
-  socket.on('join_room', (args: any) => {
+  socket.on('join_room', (args: IJoinRoomArgs) => {
     const { roomId, playerName } = args;
+    const room = rp.getRoomVolatile(roomId);
 
-    if (
-      rooms[roomId] === undefined
-      || rooms[roomId].players.length >= rooms[roomId].playerCount
-    ) {
+    if (room === undefined || room.players.length >= room.playerCount) {
       socket.emit('join_room', {
         roomInfo: null
       });
@@ -101,16 +101,16 @@ io.on('connection', (socket) => {
       return;
     }
 
-    const playerIdx = rooms[roomId].players.length;
+    const playerIdx = room.players.length;
 
     socket.join(roomId);
-    rooms[roomId].players.push({
+    room.players.push({
       name: playerName,
       alive: true,
     });
 
     io.to(roomId).emit('join_room', {
-      roomInfo: rooms[roomId],
+      roomInfo: room,
       playerInfo: {
         name: playerName,
         idx: playerIdx,
@@ -118,70 +118,74 @@ io.on('connection', (socket) => {
     });
 
     // Check if current players === total players
-    if (rooms[roomId].players.length === rooms[roomId].playerCount) {
-      rooms[roomId].isRunning = true;
+    if (room.players.length === room.playerCount) {
+      room.isRunning = true;
 
-      io.to(roomId).emit('start_room', rooms[roomId]);
+      io.to(roomId).emit('start_room', room);
     }
   });
 
-  socket.on('do_move', (args: any) => {
+  socket.on('do_move', (args: IDoMoveArgs) => {
     const { roomId, playerInfo, x, y } = args;
+    const room = rp.getRoomVolatile(roomId);
 
     // Evaluate next player
-    rooms[roomId].currentPlayerTurn = getNextPlayerIdx(roomId, playerInfo);
+    room.currentPlayerTurn = getNextPlayerIdx(roomId, playerInfo);
 
     // Send enemy_move (difference between do_move is it sends entire room_info)
     io.to(roomId).emit('broadcast_move', {
-      roomInfo: rooms[roomId],
+      roomInfo: room,
       playerInfo,
       x,
       y,
     });
   });
 
-  socket.on('leave_room', (args: any) => {
+  socket.on('leave_room', (args: ILeaveRoomArgs) => {
     const { roomId } = args;
     socket.leave(roomId);
   });
 
-  socket.on('leave_game', (args: any) => {
+  socket.on('leave_game', (args: ILeaveGameArgs) => {
     const { roomId } = args;
     socket.leave(roomId);
     socket.disconnect();
   });
 
-  socket.on('skip_dead_player', (args: any) => {
+  socket.on('skip_dead_player', (args: ISkipDeadPlayerArgs) => {
     const { roomId, playerInfo } = args;
+    const room = rp.getRoomVolatile(roomId);
+
     console.log(`skip_dead_player ${JSON.stringify(playerInfo)}`);
 
     const idx = playerInfo.idx;
-    rooms[roomId].players[idx].alive = false;
+    room.players[idx].alive = false;
 
-    rooms[roomId].currentPlayerTurn = getNextPlayerIdx(roomId, playerInfo);
+    room.currentPlayerTurn = getNextPlayerIdx(roomId, playerInfo);
 
     io.to(roomId).emit('broadcast_skip', {
-      roomInfo: rooms[roomId],
+      roomInfo: room,
       playerInfo
     });
   });
 
-  socket.on('win_check', (args: any) => {
+  socket.on('win_check', (args: IWinCheckArgs) => {
     const { roomId } = args;
+    const room = rp.getRoomVolatile(roomId);
 
-    const aliveList = rooms[roomId].players
-      .filter((player: { name: string, alive: any; }) => player.alive);
+    const aliveList = room.players
+      .filter((player: IPlayerStatus) => player.alive);
 
     if (aliveList.length === 1) {
-      rooms[roomId].isDone = true;
-      rooms[roomId].isRunning = false;
+      room.isDone = true;
+      room.isRunning = false;
 
-      const idx = rooms[roomId].players
-        .map((player: { name: string, alive: any; }) => player.alive)
+      const idx = room.players
+        .map((player: IPlayerStatus) => player.alive)
         .indexOf(true);
 
       io.to(roomId).emit('declare_winner', {
-        roomInfo: rooms[roomId],
+        roomInfo: room,
         playerInfo: {
           name: aliveList[0].name,
           idx: idx,
