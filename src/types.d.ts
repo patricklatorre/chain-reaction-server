@@ -1,10 +1,3 @@
-// interface IRoomDetails {
-//   id: string;
-//   playerCount: number;
-//   isDone: boolean;
-//   currentPlayerTurn: number;
-// }
-
 interface ICreateRoomArgs {
   playerName: string;
   playerCount: number;
@@ -25,14 +18,14 @@ interface IJoinRoomArgs {
 
 interface IDoMoveArgs {
   roomId: string;
-  playerInfo: any;
+  playerInfo: IPlayerInfo;
   x: number;
   y: number;
 }
 
 interface ISkipDeadPlayerArgs {
   roomId: string;
-  playerInfo: any;
+  playerInfo: IPlayerInfo;
 }
 
 interface IWinCheckArgs {
@@ -47,8 +40,9 @@ interface IRoomProvider {
   setRoom: (id: string, updatedRoom: IRoom) => void;
 }
 
-interface IChainpopServices {
-
+interface IPlayerInfo {
+  name: string | null;
+  idx: number | null | undefined;
 }
 
 interface IRoom {
